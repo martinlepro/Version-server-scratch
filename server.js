@@ -1,12 +1,15 @@
 // server.js
 import express from "express";
 import dotenv from "dotenv";
+import cors from "cors"; // <-- Ajout de cette ligne
 
 // Charger les variables d'environnement depuis .env
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+app.use(cors()); // <-- Ajout de cette ligne
 
 // Endpoint principal : version + lien
 app.get("/version.json", (req, res) => {
