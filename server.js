@@ -11,6 +11,8 @@ const PORT = process.env.PORT || 3000;
 
 // --- MIDDLEWARES ---
 // Active CORS pour toutes les requêtes (important pour Turbowarp)
+// En production, tu voudrais peut-être restreindre cela à des origines spécifiques:
+// app.use(cors({ origin: ['https://turbowarp.org', 'https://ton-site-web.com'] }));
 app.use(cors());
 // Parse les corps de requêtes au format JSON
 app.use(express.json());
@@ -96,35 +98,42 @@ app.get("/api/leaderboard", (req, res) => {
 app.get("/api/users/:userId", (req, res) => {
   const { userId } = req.params;
   if (usersData[userId]) {
-    // Note: Pour une vraie API, tu pourrais ne pas renvoyer toutes les infos sensibles
-    // ici, mais juste un statut 200. Pour ce cas, on renvoie tout.
     res.status(200).json(usersData[userId]);
   } else {
     res.status(404).send("Utilisateur non trouvé.");
   }
 });
 
-// 3. POST /api/users/:userId/profile
-// Met à jour un champ de profil spécifique pour un utilisateur
-app.post("/api/users/:userId/profile", (req, res) => {
-  const { userId } = req.params;
-  const { field, value } = req.body;
+// NOUVEL ENDPOINT : 3. POST /api/users
+// Ajoute un nouvel utilisateur
+app.post("/api/users", (req, res) => {
+  const { userId, username } = req.body;
 
-  if (!usersData[userId]) {
-    return res.status(404).send("Utilisateur non trouvé.");
+  if (!userId || !username) {
+    return res.status(400).send("ID utilisateur et pseudo sont requis.");
   }
-  if (!field || typeof value === "undefined") {
-    return res.status(400).send("Champ ou valeur manquante dans la requête.");
+  if (usersData[userId]) {
+    return res.status(409).send("Un utilisateur avec cet ID existe déjà.");
   }
 
-  // Initialise l'objet profile si absent
-  if (!usersData[userId].profile) {
-    usersData[userId].profile = {};
-  }
-  // Met à jour le champ de profil
-  usersData[userId].profile[field] = value;
-  res.status(200).send(`Champ de profil '${field}' de l'utilisateur '${userId}' mis à jour.`);
+  usersData[userId] = {
+    userId: userId,
+    username: username,
+    profile: {
+      bio: "", // Bio vide par défaut
+      avatarUrl: "", // URL avatar vide par défaut
+      customStatus: "" // Statut vide par défaut
+    },
+    scoreFields: {
+      mainScore: 0, // Scores à zéro par défaut
+      level: 0
+      // ... autres scores par défaut si nécessaire
+    }
+  };
+  res.status(201).json({ message: `Utilisateur '${username}' (ID: ${userId}) ajouté avec succès.`, user: usersData[userId] });
 });
+
+// ANCIEN ENDPOINT SUPPRIMÉ: POST /api/users/:userId/profile (les blocs correspondants ont été retirés de l'extension)
 
 // 4. GET /api/users/:userId/scores
 // Renvoie toutes les données de score d'un utilisateur
@@ -144,7 +153,6 @@ app.get("/api/users/:userId/scores", (req, res) => {
 app.get("/api/users/:userId/scores/:fieldName", (req, res) => {
   const { userId, fieldName } = req.params;
   if (usersData[userId] && usersData[userId].scoreFields && usersData[userId].scoreFields.hasOwnProperty(fieldName)) {
-    // On renvoie la valeur directement, pas un objet, pour le bloc Reporter
     res.status(200).json(usersData[userId].scoreFields[fieldName]);
   } else {
     res.status(404).send(`Champ de score '${fieldName}' non trouvé pour l'utilisateur '${userId}'.`);
@@ -158,8 +166,6 @@ app.post("/api/users/:userId/scores", (req, res) => {
   const { field, value } = req.body;
 
   if (!usersData[userId]) {
-    // Si l'utilisateur n'existe pas, on peut le créer avec des scores si on veut,
-    // mais pour l'instant on renvoie 404.
     return res.status(404).send("Utilisateur non trouvé.");
   }
   if (!field || typeof value === "undefined") {
@@ -170,7 +176,6 @@ app.post("/api/users/:userId/scores", (req, res) => {
   if (!usersData[userId].scoreFields) {
     usersData[userId].scoreFields = {};
   }
-  // Met à jour le score
   usersData[userId].scoreFields[field] = value;
   res.status(200).send(`Donnée de score '${field}' de l'utilisateur '${userId}' mise à jour à '${value}'.`);
 });
@@ -191,7 +196,6 @@ app.post("/api/users/:userId/rename-score-field", (req, res) => {
     return res.status(404).send(`Ancien champ de score '${oldField}' non trouvé pour l'utilisateur '${userId}'.`);
   }
 
-  // Renomme le champ
   usersData[userId].scoreFields[newField] = usersData[userId].scoreFields[oldField];
   delete usersData[userId].scoreFields[oldField];
   res.status(200).send(`Champ de score '${oldField}' de l'utilisateur '${userId}' renommé en '${newField}'.`);
