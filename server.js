@@ -10,93 +10,67 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // --- MIDDLEWARES ---
-// Active CORS pour toutes les requêtes (important pour Turbowarp)
-// En production, tu voudrais peut-être restreindre cela à des origines spécifiques:
-// app.use(cors({ origin: ['https://turbowarp.org', 'https://ton-site-web.com'] }));
 app.use(cors());
-// Parse les corps de requêtes au format JSON
 app.use(express.json());
 
 // --- BASE DE DONNÉES EN MÉMOIRE (ATTENTION: données non persistantes !) ---
-// Cela simule une base de données. En production, utilise une vraie base de données.
 const usersData = {
   "user123": {
     userId: "user123",
     username: "JoueurX",
-    profile: {
-      bio: "J'adore les jeux TurboWarp!",
-      avatarUrl: "https://example.com/avatar/joueurx.png",
-      customStatus: "En pleine partie !"
-    },
-    scoreFields: {
-      mainScore: 12345,
-      level: 10,
-      coins: 500,
-      bestTime: 60.5
-    }
+    profile: { bio: "J'adore les jeux TurboWarp!", avatarUrl: "https://example.com/avatar/joueurx.png", customStatus: "En pleine partie !" },
+    scoreFields: { mainScore: 12345, level: 10, coins: 500, bestTime: 60.5 }
   },
   "user456": {
     userId: "user456",
     username: "BetaTester",
-    profile: {
-      bio: "Je teste tous les bugs !",
-      avatarUrl: "https://example.com/avatar/betatester.png",
-      customStatus: "Bientôt un nouveau record..."
-    },
-    scoreFields: {
-      mainScore: 9876,
-      level: 8,
-      coins: 300,
-      bestTime: 75.2
-    }
+    profile: { bio: "Je teste tous les bugs !", avatarUrl: "https://example.com/avatar/betatester.png", customStatus: "Bientôt un nouveau record..." },
+    scoreFields: { mainScore: 9876, level: 8, coins: 300, bestTime: 75.2 }
   },
   "user789": {
     userId: "user789",
     username: "TheWinner",
-    profile: {
-      bio: "Toujours au top du classement.",
-      avatarUrl: "https://example.com/avatar/thewinner.png",
-      customStatus: "En route pour la gloire !"
-    },
-    scoreFields: {
-      mainScore: 15000,
-      level: 12,
-      coins: 700,
-      bestTime: 55.0
-    }
+    profile: { bio: "Toujours au top du classement.", avatarUrl: "https://example.com/avatar/thewinner.png", customStatus: "En route pour la gloire !" },
+    scoreFields: { mainScore: 15000, level: 12, coins: 700, bestTime: 55.0 }
   }
-  // Ajoute d'autres utilisateurs de test ici si tu le souhaites
 };
 
-// --- ENDPOINTS EXISTANTS ---
+// --- ENDPOINTS EXISTANTS ET MODIFIÉS ---
 
-// Endpoint principal : version + lien
+// MODIFICATION ICI : L'URL racine renvoie maintenant le JSON de version (comme demandé implicitement)
+app.get("/", (req, res) => {
+  console.log("--> Requête GET sur / (racine)"); // LOG
+  res.json({
+    version: process.env.VERSION || "inconnu",
+    url: process.env.PROJECT_URL || null,
+    message: "Bienvenue sur le serveur Render de Dino !" // Message supplémentaire si tu veux
+  });
+});
+
+// Endpoint principal : version + lien (maintenu pour compatibilité si besoin)
 app.get("/version.json", (req, res) => {
+  console.log("--> Requête GET sur /version.json"); // LOG
   res.json({
     version: process.env.VERSION || "inconnu",
     url: process.env.PROJECT_URL || null
   });
 });
 
-// Endpoint de test
-app.get("/", (req, res) => {
-  res.send("✅ Serveur actif - consultez /version.json pour voir la version et le lien");
-});
 
 // --- NOUVEAUX ENDPOINTS POUR LES BLOCS TURBOWARP ---
 
 // 1. GET /api/leaderboard
-// Renvoie la liste de tous les utilisateurs triés par 'mainScore' (simple pour l'exemple)
 app.get("/api/leaderboard", (req, res) => {
+  console.log("--> Requête GET sur /api/leaderboard"); // LOG
   const leaderboard = Object.values(usersData)
-    .sort((a, b) => (b.scoreFields.mainScore || 0) - (a.scoreFields.mainScore || 0)); // Tri descendant par mainScore
+    .sort((a, b) => (b.scoreFields.mainScore || 0) - (a.scoreFields.mainScore || 0));
   res.json(leaderboard);
 });
 
 // 2. GET /api/users/:userId
-// Vérifie l'existence d'un utilisateur et renvoie ses infos
 app.get("/api/users/:userId", (req, res) => {
   const { userId } = req.params;
+  console.log(`--> Requête GET sur /api/users/${userId}`); // LOG
   if (usersData[userId]) {
     res.status(200).json(usersData[userId]);
   } else {
@@ -104,15 +78,17 @@ app.get("/api/users/:userId", (req, res) => {
   }
 });
 
-// NOUVEL ENDPOINT : 3. POST /api/users
-// Ajoute un nouvel utilisateur
+// 3. POST /api/users
 app.post("/api/users", (req, res) => {
   const { userId, username } = req.body;
+  console.log(`--> Requête POST sur /api/users avec ID: ${userId}, Pseudo: ${username}`); // LOG pour l'arrivée de la requête
 
   if (!userId || !username) {
+    console.warn(`[API /users] Erreur 400: ID ou pseudo manquant. Body: ${JSON.stringify(req.body)}`); // LOG d'erreur
     return res.status(400).send("ID utilisateur et pseudo sont requis.");
   }
   if (usersData[userId]) {
+    console.warn(`[API /users] Erreur 409: Utilisateur ${userId} existe déjà.`); // LOG d'erreur
     return res.status(409).send("Un utilisateur avec cet ID existe déjà.");
   }
 
@@ -120,38 +96,36 @@ app.post("/api/users", (req, res) => {
     userId: userId,
     username: username,
     profile: {
-      bio: "", // Bio vide par défaut
-      avatarUrl: "", // URL avatar vide par défaut
-      customStatus: "" // Statut vide par défaut
+      bio: "",
+      avatarUrl: "",
+      customStatus: ""
     },
     scoreFields: {
-      mainScore: 0, // Scores à zéro par défaut
+      mainScore: 0,
       level: 0
-      // ... autres scores par défaut si nécessaire
     }
   };
+  console.log(`[API /users] Utilisateur '${username}' (ID: ${userId}) créé avec succès.`); // LOG de succès
   res.status(201).json({ message: `Utilisateur '${username}' (ID: ${userId}) ajouté avec succès.`, user: usersData[userId] });
 });
 
-// ANCIEN ENDPOINT SUPPRIMÉ: POST /api/users/:userId/profile (les blocs correspondants ont été retirés de l'extension)
-
 // 4. GET /api/users/:userId/scores
-// Renvoie toutes les données de score d'un utilisateur
 app.get("/api/users/:userId/scores", (req, res) => {
   const { userId } = req.params;
+  console.log(`--> Requête GET sur /api/users/${userId}/scores`); // LOG
   if (usersData[userId] && usersData[userId].scoreFields) {
     res.status(200).json(usersData[userId].scoreFields);
   } else if (usersData[userId]) {
-    res.status(200).json({}); // L'utilisateur existe mais n'a pas encore de scores
+    res.status(200).json({});
   } else {
     res.status(404).send("Utilisateur non trouvé.");
   }
 });
 
 // 5. GET /api/users/:userId/scores/:fieldName
-// Renvoie la valeur d'un champ de score spécifique pour un utilisateur
 app.get("/api/users/:userId/scores/:fieldName", (req, res) => {
   const { userId, fieldName } = req.params;
+  console.log(`--> Requête GET sur /api/users/${userId}/scores/${fieldName}`); // LOG
   if (usersData[userId] && usersData[userId].scoreFields && usersData[userId].scoreFields.hasOwnProperty(fieldName)) {
     res.status(200).json(usersData[userId].scoreFields[fieldName]);
   } else {
@@ -160,10 +134,10 @@ app.get("/api/users/:userId/scores/:fieldName", (req, res) => {
 });
 
 // 6. POST /api/users/:userId/scores
-// Crée ou met à jour un champ de score spécifique pour un utilisateur
 app.post("/api/users/:userId/scores", (req, res) => {
   const { userId } = req.params;
   const { field, value } = req.body;
+  console.log(`--> Requête POST sur /api/users/${userId}/scores pour ${field}: ${value}`); // LOG
 
   if (!usersData[userId]) {
     return res.status(404).send("Utilisateur non trouvé.");
@@ -172,7 +146,6 @@ app.post("/api/users/:userId/scores", (req, res) => {
     return res.status(400).send("Champ ou valeur manquante dans la requête.");
   }
 
-  // Initialise l'objet scoreFields si absent
   if (!usersData[userId].scoreFields) {
     usersData[userId].scoreFields = {};
   }
@@ -181,10 +154,10 @@ app.post("/api/users/:userId/scores", (req, res) => {
 });
 
 // 7. POST /api/users/:userId/rename-score-field
-// Renomme un champ de score pour un utilisateur
 app.post("/api/users/:userId/rename-score-field", (req, res) => {
   const { userId } = req.params;
   const { oldField, newField } = req.body;
+  console.log(`--> Requête POST sur /api/users/${userId}/rename-score-field pour ${oldField} -> ${newField}`); // LOG
 
   if (!usersData[userId]) {
     return res.status(404).send("Utilisateur non trouvé.");
